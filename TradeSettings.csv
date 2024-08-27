@@ -1,0 +1,2 @@
+Symbol,Quantity,EXPIERY,EntryVariable,SLvariable,BASESYMBOL,USE_CPR,Tp1Qty,Tp2Qty,EntryTime,ExitTime,strikestep,StrikeNumber,USEEXPIERY,TradeExpiery,AliceblueTradeExp,PRODUCT_TYPE
+Nifty 50,50,29-Aug-24,5,3,NIFTY,TRUE,25,25,14:05,23:50,50,2,MONTHLY,29-Aug-24,29-Aug-24,D

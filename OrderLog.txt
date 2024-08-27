@@ -1,0 +1,7 @@
+27/08/2024 14:37:11 Sell @ Nifty 50 @ 25041.75
+27/08/2024 14:37:19 Sell T1 executed  @ 25039.8 option contract : Nifty 50 new sl level = 25058.241400000003
+27/08/2024 14:40:50 Sell @ Nifty 50 @ 25041.7
+27/08/2024 14:42:16 Sell T1 executed  @ 25039.95 option contract : Nifty 50 new sl level = 25058.241400000003
+27/08/2024 14:44:34 Sell @ Nifty 50 @ 25042.2
+27/08/2024 14:44:34 Sell @ Nifty 50 @ 25042.2 option contract : NSE:Nifty 5029-Aug-2425050PE, initial sl =25050.550000000003, T1=25040.941400000003,T2=25023.641400000004
+27/08/2024 14:44:42 Sell T1 executed  @ 25040.55 option contract : Nifty 50 new sl level = 25058.241400000003
