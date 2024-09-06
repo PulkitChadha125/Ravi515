@@ -38,12 +38,28 @@ def option_delta_calculation(symbol,expiery,Tradeexp,strike,optiontype,underlyin
     date_obj = datetime.strptime(Tradeexp, "%d-%b-%y")
     formatted_date = date_obj.strftime("%d%b%y").upper()
     optionsymbol = f"{symbol}{formatted_date}{strike}{optiontype}"
-    optionltp=AngelIntegration.get_ltp(segment="NFO", symbol=optionsymbol,
+
+
+    fein = 'NFO'
+    if symbol == "BANKEX" or symbol == "SENSEX":
+        fein = "BFO"
+        if MODE == "WEEKLY":
+            date_obj = datetime.strptime(Tradeexp, '%d-%b-%y')
+            formatted_date = f"{date_obj.strftime('%y')}{int(date_obj.strftime('%m'))}{date_obj.strftime('%d')}"
+            optionsymbol=f"{symbol}{formatted_date}{strike}{optiontype}"
+
+        #
+        if MODE == "MONTHLY":
+            date_obj = datetime.strptime(Tradeexp, '%d-%b-%y')
+            formatted_date = f"{date_obj.strftime('%y')}{date_obj.strftime('%b').upper()}"
+            optionsymbol=f"{symbol}{formatted_date}{strike}{optiontype}"
+            print("delta optionsymbol: ", optionsymbol)
+
+    optionltp=AngelIntegration.get_ltp(segment=fein, symbol=optionsymbol,
                              token=get_token(optionsymbol))
     if MODE == "WEEKLY":
-        date_object = datetime.strptime(expiery, '%d-%b-%y')
-        distanceexp = convert_julian_date(date_object)
-        print("WEEKLY: ",distanceexp)
+        distanceexp = datetime.strptime(expiery, "%d-%b-%y")  # Convert string to datetime object if necessary
+        print("MONTHLY: ", distanceexp)
     if MODE == "MONTHLY":
         distanceexp = datetime.strptime(expiery, "%d-%b-%y")  # Convert string to datetime object if necessary
         print("MONTHLY: ",distanceexp)
@@ -112,7 +128,7 @@ def get_user_settings():
                 'AliceblueTradeExp': row['AliceblueTradeExp'], "PRODUCT_TYPE": row['PRODUCT_TYPE'],"InitialOnce":None,
                 'FifteenHigh': None, "FifteenLow":None,"Bp":None,"Sp":None,"SL_level":0,"T1_level":0,"T2_level":0,'Trade':None,
                 'Tsl':None,"pphit":None,'Tp1Qty':row['Tp1Qty'],'Tp2Qty':row['Tp2Qty'],"BUY":False,"SHORT":False,"ReversalLevel":0,"T2Done":False,
-                'Previoustrade':None,"RevTrade":False,"aliceexp": None,"producttype":row['PRODUCT_TYPE'],
+                'Previoustrade':None,"RevTrade":False,"aliceexp": None,"producttype":row['PRODUCT_TYPE'],'TimeBasedExit':None,"segemntfetch":None,
             }
             result_dict[row['Symbol']] = symbol_dict
         print("result_dict: ", result_dict)
@@ -198,29 +214,118 @@ def main_strategy():
             symbol_value = params['Symbol']
             timestamp = datetime.now()
             timestamp = timestamp.strftime("%d/%m/%Y %H:%M:%S")
-
+            EntryTime = params['EntryTime']
+            EntryTime = datetime.strptime(EntryTime, "%H:%M").time()
+            ExitTime = params['ExitTime']
+            ExitTime = datetime.strptime(ExitTime, "%H:%M").time()
+            current_time = datetime.now().time()
             if isinstance(symbol_value, str):
                 if params["InitialOnce"]==None:
                     params["InitialOnce"] ="DONE"
+                    params["segemntfetch"] = 'NSE'
+                    if symbol_value == "BANKEX" or symbol_value == "SENSEX":
+                        params["segemntfetch"] = "BSE"
+
                     initialdata= AngelIntegration.get_historical_data(symbol=params['Symbol'],token=get_token(params['Symbol']),\
-                                                                      timeframe="FIFTEEN_MINUTE",segment='NSE')
+                                                                      timeframe="FIFTEEN_MINUTE",segment=params["segemntfetch"])
                     params['FifteenHigh']= initialdata.iloc[-2]['high']
                     params['FifteenLow']= initialdata.iloc[-2]['low']
                     params["Bp"]=  ((params['FifteenHigh']+params['FifteenLow'])/2)+ params['EntryVariable']
                     params["Sp"]=  ((params['FifteenHigh']+params['FifteenLow'])/2)- params['EntryVariable']
+                    bSL = ((params['FifteenHigh'] + params['FifteenLow']) / 2) - params['SLvariable']
+                    bt1 = ((params['FifteenHigh'] + params['FifteenLow']) / 2) + (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow'])))
+                    bt2 = (((params['FifteenHigh'] + params['FifteenLow']) / 2) + (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow'])))) + (
+                                                     params['FifteenHigh'] - params['FifteenLow'])
+                    btsl=params['Tsl']= (((params['FifteenHigh']+params['FifteenLow'])/2)+(params['FifteenHigh']-params['FifteenLow'])+(0.618*(params['FifteenHigh']-params['FifteenLow']))) -  (params['FifteenHigh']-params['FifteenLow'])
+                    reversalput=(((params['FifteenHigh']+ params['FifteenLow'])/2)+(params['FifteenHigh']- params['FifteenLow'])+(0.618*(params['FifteenHigh']- params['FifteenLow']))) + ((params['FifteenHigh']- params['FifteenLow'])+(0.618*(params['FifteenHigh']- params['FifteenLow'])))
+                    brtsl=(((params['FifteenHigh']+params['FifteenLow'])/2)+(params['FifteenHigh']-params['FifteenLow'])+(0.618*(params['FifteenHigh']-params['FifteenLow']))) + ((params['FifteenHigh']-params['FifteenLow'])+(0.618*(params['FifteenHigh']-params['FifteenLow'])))
+                    brsl = (((params['FifteenHigh'] + params['FifteenLow']) / 2) + (
+                            params['FifteenHigh'] - params['FifteenLow']) + (
+                                                  0.618 * (params['FifteenHigh'] - params['FifteenLow']))) + (
+                                                 (params['FifteenHigh'] - params['FifteenLow']) + (
+                                                     0.618 * (params['FifteenHigh'] - params['FifteenLow']))) + params[
+                                         'SLvariable']
+
+                    brt1 = ((params['FifteenHigh'] + params['FifteenLow']) / 2) + (
+                            (params['FifteenHigh'] - params['FifteenLow']) + (
+                                0.618 * (params['FifteenHigh'] - params['FifteenLow']))) + (
+                                                 params['FifteenHigh'] - params['FifteenLow'])
+                    brt2 = ((params['FifteenHigh'] + params['FifteenLow']) / 2) + (
+                            params['FifteenHigh'] - params['FifteenLow']) + (
+                                                 0.618 * (params['FifteenHigh'] - params['FifteenLow']))
+
+                    ssl = ((params['FifteenHigh'] + params['FifteenLow']) / 2) + params['SLvariable']
+                    st1 = ((params['FifteenHigh'] + params['FifteenLow']) / 2) - (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow'])))
+                    st2= ((params['FifteenHigh'] + params['FifteenLow']) / 2) - (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow']))) - (
+                                                     params['FifteenHigh'] - params['FifteenLow'])
+                    srsl = ((params['FifteenHigh'] + params['FifteenLow']) / 2) - (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow']))) - (
+                                                     (params['FifteenHigh'] - params['FifteenLow']) + (
+                                                         0.618 * (params['FifteenHigh'] - params['FifteenLow']))) - \
+                                         params['SLvariable']
+
+                    srt1 = ((params['FifteenHigh'] + params['FifteenLow']) / 2) - (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow']))) - (
+                                                     params['FifteenHigh'] - params['FifteenLow'])
+
+                    srt2 = ((params['FifteenHigh'] + params['FifteenLow']) / 2) - (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow'])))
+
+                    stslt1 = ((params['FifteenHigh'] + params['FifteenLow']) / 2) - (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow']))) + (
+                                         params['FifteenHigh'] - params['FifteenLow'])
 
 
-                ltp=AngelIntegration.get_ltp(segment='NSE',symbol=params['Symbol'],token=get_token(params['Symbol']))
 
-                print(f"FifteenHigh:{params['FifteenHigh']}, FifteenLow:{params['FifteenLow']}, BuyPrice: {params['Bp']},SellPrice: {params['Sp']},"
+                    callreversal = ((params['FifteenHigh'] + params['FifteenLow']) / 2) - (
+                                (params['FifteenHigh'] - params['FifteenLow']) + (
+                                    0.618 * (params['FifteenHigh'] - params['FifteenLow']))) - (
+                                               (params['FifteenHigh'] - params['FifteenLow']) + (
+                                                   0.618 * (params['FifteenHigh'] - params['FifteenLow'])))
+
+                    orderlog=(f"{timestamp} {symbol_value} FifteenHigh: {params['FifteenHigh']}, FifteenLow: {params['FifteenLow']} ,Buyprice: {params['Bp']}, Sellprice={params['Sp']}, Buyt1={bt1},Buyt2={bt2},Buysl={bSL},BuyTSl after t1 {btsl},"
+                          f"PutReversal Level = {reversalput}, Putreversal_T1={brt1},Putreversal_T2={brt2},Putreversal_Sl={brsl},Putreversal after T1 ={brtsl}"
+                          f", Sellt1={st1}, Sellt2={st2},SellSl={ssl},CallReversal Level={callreversal}"
+                          f" Callreversal_T1={srt1},Callreversal_T2={srt2},Callreversal_Sl={srsl},Callreversal after T1 ={stslt1}")
+                    print(orderlog)
+                    write_to_order_logs(orderlog)
+                ltp=AngelIntegration.get_ltp(segment=params["segemntfetch"],symbol=params['Symbol'],token=get_token(params['Symbol']))
+
+                print(f"{symbol_value}  ltp: {ltp}  FifteenHigh:{params['FifteenHigh']}, FifteenLow:{params['FifteenLow']}, BuyPrice: {params['Bp']},SellPrice: {params['Sp']},"
                       f"SL_level: {params['SL_level']} ,T1_level: {params['T1_level']} ,T2_level: {params['T2_level']} ,"
                       f"ReversalLevel:{params['ReversalLevel']}, Trade : {params['Trade']}, T2Done :{params['T2Done']}")
-
+                strikelist = getstrikes_put(
+                    ltp=round_to_nearest(number=ltp, nearest=params['strikestep']),
+                    step=params['StrikeNumber'],
+                    strikestep=params['strikestep'])
+                print("Strikes to check for delta put:", strikelist)
+                for strike in strikelist:
+                    delta = float(
+                        option_delta_calculation(symbol=params['BASESYMBOL'], expiery=str(params['TradeExpiery']),
+                                                 Tradeexp=params['TradeExpiery'],
+                                                 strike=strike,
+                                                 optiontype="PE",
+                                                 underlyingprice=ltp,
+                                                 MODE=params["USEEXPIERY"]))
+                    strikelist[strike] = delta
 
                 if ltp >=  params['ReversalLevel'] and params["T2Done"] == True and params['Trade']=="BUY" and  params['ReversalLevel']>0:
                     params['ReversalLevel']=0
                     params["RevTrade"]= True
                     params['Trade'] = "SHORT"
+                    params['TimeBasedExit'] = "TAKEEXIT"
                     OrderLog = f"{timestamp} Reverse Sell initiated @ {params['Symbol']} @ {ltp} "
                     write_to_order_logs(OrderLog)
                     params["SL_level"] = (((params['FifteenHigh']+params['FifteenLow'])/2)+(params['FifteenHigh']-params['FifteenLow'])+(0.618*(params['FifteenHigh']-params['FifteenLow']))) + ((params['FifteenHigh']-params['FifteenLow'])+(0.618*(params['FifteenHigh']-params['FifteenLow'])))+ params['SLvariable']
@@ -253,6 +358,8 @@ def main_strategy():
                     params['putstrike'] = final
                     optionsymbol = f"NSE:{symbol}{params['TradeExpiery']}{final}PE"
                     params['exch'] = "NFO"
+                    if symbol_value == "BANKEX" or symbol_value == "SENSEX":
+                        params["exch"] = "BFO"
 
                     aliceexp = datetime.strptime(params['AliceblueTradeExp'], '%d-%b-%y')
                     aliceexp = aliceexp.strftime('%Y-%m-%d')
@@ -272,6 +379,7 @@ def main_strategy():
                     params['ReversalLevel']= 0
                     OrderLog = f"{timestamp} Reverse Buy initiated @ {params['Symbol']} "
                     print(OrderLog)
+                    params['TimeBasedExit'] = "TAKEEXIT"
                     params["RevTrade"] = True
                     params['Trade'] = "BUY"
                     write_to_order_logs(OrderLog)
@@ -306,6 +414,8 @@ def main_strategy():
 
                     optionsymbol = f"NSE:{symbol}{params['TradeExpiery']}{final}CE"
                     params['exch'] = "NFO"
+                    if symbol_value == "BANKEX" or symbol_value == "SENSEX":
+                        params["exch"] = "BFO"
 
                     aliceexp = datetime.strptime(params['AliceblueTradeExp'], '%d-%b-%y')
                     aliceexp = aliceexp.strftime('%Y-%m-%d')
@@ -328,6 +438,7 @@ def main_strategy():
                     params['Trade']="BUY"
                     params["BUY"]= True
                     params["SHORT"]= False
+                    params['TimeBasedExit'] = "TAKEEXIT"
                     OrderLog=f"{timestamp} Buy @ {params['Symbol']} @ {ltp}"
                     params["pphit"] = "NOHIT"
                     params["SL_level"] = ((params['FifteenHigh']+ params['FifteenLow'])/2)-params['SLvariable']
@@ -360,7 +471,8 @@ def main_strategy():
 
                     optionsymbol = f"NSE:{params['BASESYMBOL']}{params['TradeExpiery']}{final}CE"
                     params['exch'] = "NFO"
-
+                    if symbol_value == "BANKEX" or symbol_value == "SENSEX":
+                        params["exch"] = "BFO"
                     aliceexp = datetime.strptime(params['AliceblueTradeExp'], '%d-%b-%y')
                     aliceexp = aliceexp.strftime('%Y-%m-%d')
                     params['aliceexp'] = aliceexp
@@ -379,6 +491,7 @@ def main_strategy():
                     params["pphit"] = "NOHIT"
                     params["BUY"] = False
                     params["SHORT"] = True
+                    params['TimeBasedExit'] = "TAKEEXIT"
                     OrderLog=f"{timestamp} Sell @ {params['Symbol']} @ {ltp}"
                     write_to_order_logs(OrderLog)
 
@@ -410,6 +523,8 @@ def main_strategy():
                     params['putstrike'] = final
                     optionsymbol = f"NSE:{symbol}{params['TradeExpiery']}{final}PE"
                     params['exch'] = "NFO"
+                    if symbol_value == "BANKEX" or symbol_value == "SENSEX":
+                        params["exch"] = "BFO"
 
                     aliceexp = datetime.strptime(params['AliceblueTradeExp'], '%d-%b-%y')
                     aliceexp = aliceexp.strftime('%Y-%m-%d')
@@ -462,7 +577,9 @@ def main_strategy():
 
 
                     if params["SL_level"] >0 and ltp<=params["SL_level"]:
+                        params['Trade'] = None
                         if params["pphit"] == "NOHIT":
+                            params['Trade'] = None
                             OrderLog = f"{timestamp} Stoploss  booked buy trade @ {symbol} @ {ltp}, lotsize={params['Quantity']}"
                             print(OrderLog)
                             params['SL_level'] = 0
@@ -496,6 +613,31 @@ def main_strategy():
                                 # print(OrderLog)
                                 # write_to_order_logs(OrderLog)
                                 params["pphit"] = "NOMORETRADES"
+
+
+                    if current_time >= ExitTime and params['TimeBasedExit'] == "TAKEEXIT" and (params["pphit"]=="HIT" or params["pphit"]=="NOHIT" ) :
+                        if params["pphit"]=="HIT":
+                            OrderLog = f"{timestamp} Time Based exit happened @ {symbol} @ {ltp}, lotsize={params['Remainingqty']}"
+                            print(OrderLog)
+                            write_to_order_logs(OrderLog)
+                            params["pphit"] = "NOMORETRADES"
+                            params['TimeBasedExit']= "NOMORETRADES"
+                            AliceBlueIntegration.buyexit(quantity=params["Remainingqty"], exch=params['exch'],
+                                                         symbol=params['BASESYMBOL'],
+                                                         expiry_date=params['aliceexp'],
+                                                         strike=params["callstrike"], call=True,
+                                                         producttype=params["producttype"])
+
+                        if params["pphit"] == "NOHIT":
+                            OrderLog = f"{timestamp}  Time Based exit happened @ {symbol} @ {ltp}, lotsize={params['Quantity']}"
+                            print(OrderLog)
+                            write_to_order_logs(OrderLog)
+                            params["pphit"] = "NOMORETRADES"
+                            params['TimeBasedExit'] = "NOMORETRADES"
+                            AliceBlueIntegration.buyexit(quantity=params["Quantity"], exch=params['exch'], symbol=params['BASESYMBOL'],
+                                                         expiry_date=params['aliceexp'],
+                                                         strike=params["callstrike"], call=True,
+                                                         producttype=params["producttype"])
 
 
                 if params['Trade']=="SHORT":
@@ -536,6 +678,7 @@ def main_strategy():
 
 
                     if params["SL_level"] >0 and ltp >= params["SL_level"]:
+                        params['Trade'] = None
                         if params["pphit"] == "NOHIT":
                             params['Trade'] = None
                             params['SL_level'] = 0
@@ -562,7 +705,30 @@ def main_strategy():
                                                          strike=params["putstrike"], call=False,
                                                          producttype=params["producttype"])
 
+                    if current_time >= ExitTime and params['TimeBasedExit'] == "TAKEEXIT" and (params["pphit"]=="HIT" or params["pphit"]=="NOHIT" ) :
+                        if params["pphit"]=="HIT":
+                            OrderLog = f"{timestamp} Time Based exit happened @ {symbol} @ {ltp}, lotsize={params['Remainingqty']}"
+                            print(OrderLog)
+                            write_to_order_logs(OrderLog)
+                            params["pphit"] = "NOMORETRADES"
+                            params['TimeBasedExit'] = "NOMORETRADES"
+                            AliceBlueIntegration.buyexit(quantity=params["Remainingqty"], exch=params['exch'],
+                                                         symbol=params['BASESYMBOL'],
+                                                         expiry_date=params['aliceexp'],
+                                                         strike=params["putstrike"], call=False,
+                                                         producttype=params["producttype"])
 
+                        if params["pphit"] == "NOHIT":
+                            OrderLog = f"{timestamp}  Time Based exit happened @ {symbol} @ {ltp}, lotsize={params['Quantity']}"
+                            print(OrderLog)
+                            write_to_order_logs(OrderLog)
+                            params["pphit"] = "NOMORETRADES"
+                            params['TimeBasedExit'] = "NOMORETRADES"
+                            AliceBlueIntegration.buyexit(quantity=params["Quantity"], exch=params['exch'],
+                                                         symbol=params['BASESYMBOL'],
+                                                         expiry_date=params['aliceexp'],
+                                                         strike=params["putstrike"], call=False,
+                                                         producttype=params["producttype"])
 
 
     except Exception as e:
